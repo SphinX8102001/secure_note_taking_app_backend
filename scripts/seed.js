@@ -1,6 +1,7 @@
 // Resets the users/notes/posts collections and inserts demo data.
-// Local development only.
+// Works against local MongoDB or a hosted one (Atlas) via MONGODB_URI.
 const bcrypt = require('bcryptjs');
+const config = require('../src/config');
 const { connect, mongoose } = require('../src/db');
 const User = require('../src/models/User');
 const Note = require('../src/models/Note');
@@ -9,6 +10,16 @@ const Post = require('../src/models/Post');
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'Admin123!';
 const USER_PASSWORD = process.env.SEED_USER_PASSWORD || 'User123!';
+
+// The example passwords are public (they are in .env.example on GitHub), so
+// refuse to put them on any database that isn't on this machine.
+const PUBLIC_PASSWORDS = ['Admin123!', 'User123!'];
+const isLocalDb = /^mongodb:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(config.mongoUri);
+if (!isLocalDb && (PUBLIC_PASSWORDS.includes(ADMIN_PASSWORD) || PUBLIC_PASSWORDS.includes(USER_PASSWORD))) {
+  console.error('Refusing to seed a remote database with the public example passwords.');
+  console.error('Set SEED_ADMIN_PASSWORD and SEED_USER_PASSWORD to new values first.');
+  process.exit(1);
+}
 
 const PEOPLE = [
   { name: 'Alice', interests: ['chess', 'reading'] },

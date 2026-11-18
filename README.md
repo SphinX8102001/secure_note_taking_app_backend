@@ -1,46 +1,59 @@
-# Secure Notes
+# Secure Notes – Backend API
 
-A REST API for taking notes, with a minimal frontend. Built with Express, MongoDB/Mongoose, JWT authentication, bcrypt password hashing and role-based access control (`user` / `admin`).
+A REST API for taking notes. Built with Express, MongoDB/Mongoose, JWT authentication, bcrypt password hashing and role-based access control (`user` / `admin`).
+
+The minimal frontend lives in a separate repository and calls this API over CORS.
 
 ## Project structure
 
 ```
-secure_note_taking_app/
-├── backend/                  REST API (the focus of this task)
-│   ├── src/
-│   │   ├── models/           Mongoose schemas + every schema.index() definition
-│   │   ├── routes/           auth, me, notes, posts, interests, admin
-│   │   ├── services/         aggregation pipelines (Scenario 1 & 2)
-│   │   ├── middleware/       JWT authentication + role checks
-│   │   ├── utils/            pagination, validation, errors
-│   │   ├── app.js            Express app
-│   │   └── server.js         entry point
-│   └── scripts/              seed, explain (index usage), smoke-test
-└── frontend/                 minimal vanilla-JS client (index.html, app.js)
+├── src/
+│   ├── models/        Mongoose schemas + every schema.index() definition
+│   ├── routes/        auth, me, notes, posts, interests, admin
+│   ├── services/      aggregation pipelines (Scenario 1 & 2)
+│   ├── middleware/    JWT authentication + role checks
+│   ├── utils/         pagination, validation, errors
+│   ├── app.js         Express app (CORS, rate limiting, routes)
+│   └── server.js      entry point
+├── scripts/           seed, explain (index usage), smoke-test
+└── render.yaml        Render deployment blueprint
 ```
 
-The backend serves `frontend/` as static files, so the whole app runs on a single port and needs no CORS setup.
+## Run it locally
 
-## Run it
-
-Requirements: Node 18+ and MongoDB 5.0+ running locally (or set `MONGODB_URI`). Run all commands from `backend/`.
+Requirements: Node 18+ and MongoDB 5.0+ running locally (or set `MONGODB_URI`).
 
 ```bash
-cd backend
 cp .env.example .env          # then set JWT_SECRET to a long random string
 npm install
 npm run seed                  # demo users / notes / posts (wipes these 3 collections)
-npm start                     # http://localhost:4000
+npm start                     # API on http://localhost:4000
 ```
+
+Then serve the frontend repository on any localhost port (for example `npx serve -l 5173`). With `CORS_ORIGIN` empty, the API accepts any `http://localhost:<port>` origin.
+
+## Configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `MONGODB_URI` | MongoDB connection string (local or Atlas) |
+| `JWT_SECRET` | secret used to sign tokens; a long random string |
+| `JWT_EXPIRES_IN` | token lifetime, default `1d` |
+| `CORS_ORIGIN` | frontend origin(s) allowed to call the API, comma separated. Empty means localhost only |
+| `TRUST_PROXY` | `1` behind Render's proxy, so rate limiting sees real client IPs |
+| `AUTH_RATE_LIMIT` | login/register requests allowed per IP per 15 minutes, default 20 |
+| `SEED_*` | demo accounts created by `npm run seed` |
+
+`GET /api/health` reports whether the API and its database connection are up.
 
 Other scripts:
 
 | Script | What it does |
 | --- | --- |
 | `npm run explain` | Lists the indexes in the DB and runs `explain()` on **every** query and aggregation the API uses, showing which index each one hits |
-| `npm test` | End-to-end API test (42 checks) against the running server |
+| `npm test` | End-to-end API test (42 checks) against the running server. Set `API_URL` to test a deployed backend |
 
-Seeded logins: `admin@example.com` (admin) and `alice|bob|carol|dave|eve|frank@example.com` (users). Passwords are `SEED_ADMIN_PASSWORD` / `SEED_USER_PASSWORD` in `.env`.
+Seeded logins: `admin@example.com` (admin) and `alice|bob|carol|dave|eve|frank@example.com` (users). Passwords are `SEED_ADMIN_PASSWORD` / `SEED_USER_PASSWORD` in `.env`. The seed script refuses to put the example passwords on a non-local database.
 
 ## API
 
@@ -116,5 +129,17 @@ The pipeline fetches `limit + 1` posts so it can tell whether there's a next pag
 - JWTs are signed with HS256, and verification pins that algorithm. On every request the middleware reloads the user, so deleting a user or changing their role takes effect immediately.
 - Login runs a bcrypt comparison even when the email doesn't exist, so response timing doesn't reveal which accounts exist.
 - Privilege boundaries: public registration can't set a role; `PATCH /api/me` can't change role or email; users can't touch other users' notes; an admin can't demote or delete themselves.
-- The frontend renders all user content with `textContent`, never `innerHTML`.
-- Not included, but recommended for production: rate limiting on `/api/auth/*`, HTTPS, and keeping the token in an httpOnly cookie rather than `sessionStorage`.
+- `/api/auth/*` is rate limited per IP, and CORS only accepts the configured frontend origin(s).
+- Not included, but worth considering for a real product: keeping the token in an httpOnly cookie rather than the browser's `sessionStorage`.
+
+## Deployment (Render + MongoDB Atlas)
+
+1. **Database:** create a free MongoDB Atlas cluster and a database user. Under Network Access, allow `0.0.0.0/0`, since Render's free tier has no fixed IP. Copy the connection string and add a database name to it, e.g. `.../secure_notes?retryWrites=true&w=majority`.
+2. **API:** on Render, choose *New > Blueprint* and pick this repository; `render.yaml` sets everything up. Enter `MONGODB_URI` (from step 1) and `CORS_ORIGIN` (the frontend's URL, e.g. `https://your-app.vercel.app`, no trailing slash). `JWT_SECRET` is generated automatically.
+3. **Demo data:** from your machine, seed Atlas with passwords that are not the public example ones:
+   ```powershell
+   $env:MONGODB_URI="<atlas connection string>"; $env:SEED_ADMIN_PASSWORD="<new admin password>"; $env:SEED_USER_PASSWORD="<new user password>"; npm run seed
+   ```
+4. Open `https://<your-service>.onrender.com/api/health` and check it reports `"db": "up"`.
+
+The free Render tier sleeps after 15 minutes without traffic, so the first request after that takes about a minute.

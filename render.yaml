@@ -1,0 +1,23 @@
+# Render Blueprint: New > Blueprint on render.com, pick this repository.
+# Values marked "sync: false" are asked for when the blueprint is created.
+services:
+  - type: web
+    name: secure-notes-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGODB_URI
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: TRUST_PROXY
+        value: 1

@@ -1,7 +1,9 @@
 // End-to-end API check against a running server (npm start) with seeded data (npm run seed).
 require('dotenv').config();
 
-const BASE = `http://localhost:${process.env.PORT || 4000}/api`;
+// Set API_URL to test a deployed backend, e.g. API_URL=https://my-api.onrender.com
+const ROOT = process.env.API_URL || `http://localhost:${process.env.PORT || 4000}`;
+const BASE = `${ROOT.replace(/\/$/, '')}/api`;
 const ADMIN = { email: process.env.SEED_ADMIN_EMAIL || 'admin@example.com', password: process.env.SEED_ADMIN_PASSWORD || 'Admin123!' };
 const USER_PASSWORD = process.env.SEED_USER_PASSWORD || 'User123!';
 
