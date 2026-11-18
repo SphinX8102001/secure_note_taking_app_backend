@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node scripts/seed.js",
+    "seed:atlas": "node --env-file=.env.atlas scripts/seed.js",
     "explain": "node scripts/explain.js",
     "test": "node scripts/smoke-test.js"
   },
